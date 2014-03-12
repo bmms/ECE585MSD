@@ -10,7 +10,7 @@
 // Target Devices: 
 // Description: The Cache design is for a 16KB Cache 4-way set associative. This 
 //				is the L1 cache which is referenced when there in a miss in 
-//				Virtual Memory. The cache is event driven which reads CPU_Request 
+//				Virtual Memory. The cache is event driven which reads VMEM_Request 
 //				and provides an acknowledgement back to the virtual memory. If 
 //				there is a miss, it generates the Mem_Request high and waits for
 //				acknowledgement from the memory.  
@@ -37,19 +37,18 @@
 
 
 module L1_Cache(
-	input CPU_Request, //request from CPU(read/write)
-    input 	[31:0] CPU_Address,
-	output reg	[31:0] Mem_Address,
+	input VMEM_Request, //request from CPU(read/write)
+	output reg VMEM_ACK, // acknowledge the completion to CPU
 	output reg Mem_Request, //request to Mem(read/write) 
-    inout 	[31:0] CPU_dataBus,
+	input MEM_ACK,	// acknowledge the completion from memory
+	input OP_Request, //Request for operations
+	input [3:0]OPERATIONS, //Actual operation
+    input 	[31:0] VMEM_Address,
+	output reg	[31:0] Mem_Address,
+	inout 	[31:0] VMEM_dataBus,
 	inout 	[31:0] Mem_databus,
-	input CPU_WE,		 // write enable from CPU, perform read if low
-	input [3:0]OPERATIONS,
-	input OP_Request,
-	output reg MEM_WE,		 // write enable to memory, perform read if low
-    output reg CPU_ACK, // acknowledge the completion to CPU
-	input  MEM_ACK	// acknowledge the completion from memory
-	
+	input VMEM_WE,		 // write enable from CPU, perform read if low
+	output reg MEM_WE		 // write enable to memory, perform read if low
     );
 	 
 `include "GlobalVar.v"
@@ -67,7 +66,7 @@ parameter NO_OF_LINES_L1 = 1024; // 2^8
 parameter DATA_BUFFER_WIDTH = 32;
 parameter ADDRESS_WIDTH = 32;
 integer i,j,OP;
-reg n;
+//reg n;
 reg [6:0] m; //For the cache line write
 integer add_4;
 //wire MEM_WE;
@@ -93,34 +92,34 @@ assign MEM_databus = (MEM_WE) ? 32'bz : MEM_dataBus_driver;
 // Create a 32-bit data output buffer
 reg [DATA_BUFFER_WIDTH-1:0] CPUdataOutput;
 
-assign CPU_dataBus = (!CPU_WE & CPU_Request) ? CPUdataOutput : 32'bz;
+assign VMEM_dataBus = (!VMEM_WE & VMEM_Request) ? CPUdataOutput : 32'bz;
 initial 
 begin
 Init_Cache();
-CPU_ACK = 0;
+VMEM_ACK = 0;
 report_file = $fopen("report.txt");
 end
 
 	
 	//report_file = $fopen("report.txt","w");
 	
-always @(CPU_Request) 
+always @(VMEM_Request) 
 	begin
-		CPUdataOutput <= 0;//something akin to cache_memory[CPU_addressBus[15:2]];
+		CPUdataOutput <= 0;//something akin to cache_memory[VMEM_AddressBus[15:2]];
 			
-		if(CPU_Request==1) begin
+		if(VMEM_Request==1) begin
 			
 			
-			#1 $display("ACK INFO AT CACHE:%b",CPU_ACK);
-			case(CPU_WE)
+			#1 $display("ACK INFO AT CACHE:%b",VMEM_ACK);
+			case(VMEM_WE)
 			0: 	begin
 			
-				$display("DOING READ REQUEST FOR: %h", CPU_Address);
-				addr_OFFSET		= CPU_Address[3:0]; 
-				addr_INDEX		= CPU_Address[11:4];
-				addr_TAG		= CPU_Address[31:12];
+				$display("DOING READ REQUEST FOR: %h", VMEM_Address);
+				addr_OFFSET		= VMEM_Address[3:0]; 
+				addr_INDEX		= VMEM_Address[11:4];
+				addr_TAG		= VMEM_Address[31:12];
 
-				TotalOperations = TotalOperations +1;
+				#1 TotalOperations = TotalOperations +1;
 				//CacheFetches = CacheFetches +1.0;
 				CacheReads = CacheReads +1;
 				
@@ -130,12 +129,12 @@ always @(CPU_Request)
 			end
 			1: 	begin
 			
-				$display("DOING WRITE REQUEST FOR: %h", CPU_Address);
-				addr_OFFSET		= CPU_Address[3:0]; 
-				addr_INDEX		= CPU_Address[11:4];
-				addr_TAG		= CPU_Address[31:12];
+				$display("DOING WRITE REQUEST FOR: %h", VMEM_Address);
+				addr_OFFSET		= VMEM_Address[3:0]; 
+				addr_INDEX		= VMEM_Address[11:4];
+				addr_TAG		= VMEM_Address[31:12];
 
-				TotalOperations = TotalOperations +1;
+				#1 TotalOperations = TotalOperations +1;
 				CacheWrites = CacheWrites + 1;
 				
 				Write_L1_Cache(addr_TAG,addr_INDEX,addr_OFFSET);
@@ -145,20 +144,20 @@ always @(CPU_Request)
 				$display("");
 			endcase
 			
-			#1 CPU_ACK <= 1;
-			wait(CPU_Request==0) #1 CPU_ACK<=0;
+			#1 VMEM_ACK <= 1;
+			wait(VMEM_Request==0) #1 VMEM_ACK<=0;
 			
 		end
 		else begin
-			#1 CPU_ACK <= 0;
-			$display("RELEASING CPU_dataBus, ready for next command");
+			#1 VMEM_ACK <= 0;
+			$display("RELEASING VMEM_dataBus, ready for next command");
 		end
-		$display("Operations Completed:%d",TotalOperations );
+		//$display("Operations Completed:%d",TotalOperations );
 	end
 
 always@(OP_Request)
 begin
-	CPUdataOutput <= 0;//something akin to cache_memory[CPU_addressBus[15:2]];
+	CPUdataOutput <= 0;//something akin to cache_memory[VMEM_AddressBus[15:2]];
 			
 	if(OP_Request==1) begin
 		$display("CURRENT OPERATION:%b",OPERATIONS );
@@ -187,12 +186,12 @@ begin
 				$display("");
 				
 		endcase
-		#1 CPU_ACK <= 1;
-		wait(OP_Request==0) #1 CPU_ACK<=0;
+		#1 VMEM_ACK <= 1;
+		wait(OP_Request==0) #1 VMEM_ACK<=0;
 	end
 	else begin
-			#1 CPU_ACK <= 0;
-			$display("RELEASING CPU_dataBus, ready for next command");
+			#1 VMEM_ACK <= 0;
+			$display("RELEASING VMEM_dataBus, ready for next command");
 	end
 	
 end 
@@ -210,7 +209,6 @@ task Init_Cache;
 					cacheLINE[i][j] = {L1_LINE_SIZE{1'b0}};
 				end
 		end
-		DONE=0;
 	end
 endtask
 
@@ -243,6 +241,8 @@ begin
 	$fwrite(report_file, "Total number of cache writes: %d \n", CacheWrites);
 	$fwrite(report_file, "Total number of L1 cache hits: %d \n", L1_HitCount);
 	$fwrite(report_file, "Total number of L1 cache misses: %d \n", L1_MissCount);
+	$fwrite(report_file, "Total number of L1 cache hits: %d \n", TLB_HitCount);
+	$fwrite(report_file, "Total number of L1 cache misses: %d \n", TLB_MissCount);
 end
 endtask
 
@@ -265,11 +265,11 @@ task Read_L1_Cache;
 			& cacheVALID[addr_INDEX][2] & cacheVALID[addr_INDEX][3])
 			begin
 				//checking the LRU bits each way
-				if(!(cacheLRU [addr_INDEX][0]))
+				if(cacheLRU [addr_INDEX][0] == 0)
 					cacheVALID[addr_INDEX][0] <= 0;
-				else if (!(cacheLRU [addr_INDEX][1]))
+				else if (cacheLRU [addr_INDEX][1] == 0)
 					cacheVALID[addr_INDEX][1] <= 0;
-				else if (!(cacheLRU [addr_INDEX][2]))
+				else if (cacheLRU [addr_INDEX][2] == 0)
 					cacheVALID[addr_INDEX][2] <= 0;
 				else
 					cacheVALID[addr_INDEX][3] <= 0;
@@ -286,7 +286,7 @@ task Read_L1_Cache;
 				//read 32-bit 4 times to get the line in cache.
 				
 				//Reading first 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -294,7 +294,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading second 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 4 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 4 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -302,7 +302,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading third 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 8 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 8 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -310,7 +310,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading fourth 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 12 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 12 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -339,7 +339,7 @@ task Read_L1_Cache;
 				//Read 32-bit data four times 
 				
 				//Reading first 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -347,7 +347,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading second 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 4 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 4 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -355,7 +355,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading third 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 8 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 8 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -363,13 +363,13 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading fourth 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 12 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 12 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
 				cacheLINE[addr_INDEX][1] [127:96] <= Mem_databus;
 				#1 Mem_Request<=0;
-				setLRU_L1(0);
+				setLRU_L1(1);
 				
 				//driving the cpuoutput
 				if(addr_OFFSET[3:2]==0)
@@ -389,7 +389,7 @@ task Read_L1_Cache;
 				// Get the line from Memory
 				
 				//Reading first 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -397,7 +397,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading second 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 4 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 4 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -405,7 +405,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading third 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 8 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 8 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -413,13 +413,13 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading fourth 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 12 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 12 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
 				cacheLINE[addr_INDEX][2] [127:96] <= Mem_databus;
 				#1 Mem_Request<=0;
-				setLRU_L1(0);
+				setLRU_L1(2);
 				
 				//driving the cpuoutput
 				if(addr_OFFSET[3:2]==0)
@@ -439,7 +439,7 @@ task Read_L1_Cache;
 				// Get the line from Memory
 				
 				//Reading first 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -447,7 +447,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading second 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 4 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 4 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -455,7 +455,7 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading third 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 8 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 8 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
@@ -463,13 +463,13 @@ task Read_L1_Cache;
 				#1 Mem_Request<=0;
 				
 				//Reading fourth 32-bit word
-				#1 wait(MEM_ACK==0) Mem_Address<= 12 + CPU_Address[31:2]<<2;
+				#1 wait(MEM_ACK==0) Mem_Address<= 12 + VMEM_Address[31:2]<<2;
 				#1 Mem_Request<=1;//read from memory
 				#1 wait(MEM_ACK==1) ; 
 				//write the 32-bit to cacheline
 				cacheLINE[addr_INDEX][3] [127:96] <= Mem_databus;
 				#1 Mem_Request<=0;
-				setLRU_L1(0);
+				setLRU_L1(3);
 				
 				//driving the cpuoutput
 				if(addr_OFFSET[3:2]==0)
@@ -498,7 +498,7 @@ task Read_L1_Cache;
 					CPUdataOutput <= cacheLINE[addr_INDEX][0] [95:64]; //Third 32-bit word in the line
 				else 
 					CPUdataOutput <= cacheLINE[addr_INDEX][0] [127:96]; //Fourth 32-bit word in the line
-				#1 DONE = 1; // to control the for loop
+				#1; 
 			end
 			else if ((cacheVALID[addr_INDEX][1] & cacheTAG[addr_INDEX][1] == addr_TAG))
 			begin
@@ -512,7 +512,7 @@ task Read_L1_Cache;
 					CPUdataOutput <= cacheLINE[addr_INDEX][1] [95:64]; //Third 32-bit word in the line
 				else 
 					CPUdataOutput <= cacheLINE[addr_INDEX][1] [127:96]; //Fourth 32-bit word in the line
-				#1 DONE = 1; // to control the for loop
+				#1;
 			end
 			else if ((cacheVALID[addr_INDEX][2] & cacheTAG[addr_INDEX][2] == addr_TAG))
 			begin
@@ -565,15 +565,15 @@ task Write_L1_Cache;
 				L1_MissCount = L1_MissCount - 1;
 				//write data to cache
 				if(addr_OFFSET[3:2]==0)
-					cacheLINE[addr_INDEX][i] [31:0] <= CPU_dataBus; //First 32-bit word in the line
+					cacheLINE[addr_INDEX][i] [31:0] <= VMEM_dataBus; //First 32-bit word in the line
 				else if (addr_OFFSET[3:2]==1)
-					cacheLINE[addr_INDEX][i] [63:32] <= CPU_dataBus; //Second 32-bit word in the line
+					cacheLINE[addr_INDEX][i] [63:32] <= VMEM_dataBus; //Second 32-bit word in the line
 				else if (addr_OFFSET[3:2]==2)
-					cacheLINE[addr_INDEX][i] [95:64] <= CPU_dataBus; //Third 32-bit word in the line
+					cacheLINE[addr_INDEX][i] [95:64] <= VMEM_dataBus; //Third 32-bit word in the line
 				else 
-					cacheLINE[addr_INDEX][i] [127:96]<= CPU_dataBus; //Fourth 32-bit word in the line
-				#1 n<=i;
-				setLRU_L1(n);	//set LRU
+					cacheLINE[addr_INDEX][i] [127:96]<= VMEM_dataBus; //Fourth 32-bit word in the line
+				#1 //n<=i;
+				setLRU_L1(i);	//set LRU
 				i=L1_WAYS;
 			end
 		
@@ -581,8 +581,8 @@ task Write_L1_Cache;
 		//Send write request to memory
 		#1 wait(MEM_ACK==0) ;
 		MEM_WE<=1;
-		MEM_dataBus_driver<=CPU_dataBus;
-		Mem_Address<=CPU_Address;
+		MEM_dataBus_driver<=VMEM_dataBus;
+		Mem_Address<=VMEM_Address;
 		#1 Mem_Request<=1;
 		#4 wait(MEM_ACK==1) ;
 		#1 Mem_Request <=0;
@@ -593,16 +593,22 @@ endtask
 
 task setLRU_L1;
 	//integer i;
-	input n;
+	//input n;
+	input reg [1:0] k;
+
 	begin
 		$display("LRUInitiated");
+			//set LRU for variable n
+			cacheLRU[addr_INDEX][k] <= 1;
+			#1 ; //waiting for propagation delay
 			if (cacheLRU[addr_INDEX][0] & cacheLRU[addr_INDEX][1] & 
 			cacheLRU[addr_INDEX][2] & cacheLRU[addr_INDEX][3]) begin
 				cacheLRU[addr_INDEX][0] <= 0;
 				cacheLRU[addr_INDEX][1] <= 0;
 				cacheLRU[addr_INDEX][2] <= 0;
 				cacheLRU[addr_INDEX][3] <= 0;
-				cacheLRU[addr_INDEX][n] <= 1;
+				cacheLRU[addr_INDEX][k] <= 1;
+				#1;
 				
 			
 			end
