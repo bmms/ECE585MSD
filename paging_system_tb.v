@@ -25,7 +25,7 @@
 
 module paging_system_TB ();
 
-//Inputs to DUT
+//Inputs 
 reg CPU_Request;
 reg OP_Request;
 reg CPU_WE;
@@ -37,17 +37,20 @@ integer OP,count,m;
 
 //Outputs from DUT 
 wire [31:0] Mem_Address;
+wire [31:0] VMEM_Address;
 wire Mem_Request;
 wire MEM_WE;
 wire CPU_ACK; // acknowledge the completion to CPU
+wire VMEM_ACK;
+wire VMEM_Request;
 
 //Bidirectional lines
 wire [31:0] CPU_dataBus;
 wire [31:0] Mem_databus;
+wire [31:0] VMEM_dataBus;
 
 //Bidirectional drivers
 reg [31:0] CPU_dataBus_driver;
-reg [31:0] MEM_dataBus_driver;
 
 assign CPU_dataBus = (CPU_WE == 1 && CPU_Request==1) ? CPU_dataBus_driver : 32'bz;
 //assign MEM_dataBus_driver = Mem_databus;
