@@ -167,23 +167,29 @@ begin
 		$display("CURRENT OPERATION:%b",OPERATIONS );
 		case(OPERATIONS)
 			2: begin
-			$display("DOING AN INSTRUCTION FETCH");
-			Instruction_Fetch();
+				$display("DOING AN INSTRUCTION FETCH");
+				Instruction_Fetch();
 			end
 			
 			3:begin
-			$display("invalidate the addressed line in the cache");
-			Invalidate_L1_Line();
+				$display("invalidate the addressed line in the cache");
+				$display("INVALIDATING THE LINE IN L1: %h", VMEM_Address);
+				addr_OFFSET		= VMEM_Address[3:0]; 
+				addr_INDEX		= VMEM_Address[11:4];
+				addr_TAG		= VMEM_Address[31:12];
+
+				#1 TotalOperations = TotalOperations +1;
+				Invalidate_L1_Line(addr_TAG,addr_INDEX,addr_OFFSET);
 			end
 			
 			4: begin
-			$display("invalidate the Whole L1 cache");
-			Invalidate_L1();
+				$display("invalidate the Whole L1 cache");
+				Init_Cache();
 			end
 			
 			9:begin
-			$display("PRINT ALL STATS");
-			PrintStats();
+				$display("PRINT ALL STATS");
+				PrintStats();
 			end
 			
 			default:
@@ -224,10 +230,40 @@ end
 endtask
 
 task Invalidate_L1_Line;
-begin
-$display("WELCOME INVALIDATE L1 LINE");
 
-end
+input [L1_TAG-1:0]addr_TAG;
+input [L1_INDEX-1:0]addr_INDEX;
+input [L1_OFFSET-1:0]addr_OFFSET;
+	begin
+		$display("INVALIDATE ADDRESS LINE");
+		//Check each way and do a tag match to make sure we are on the right line
+		//If the line is a hit invalidate the line
+		if ((cacheVALID[addr_INDEX][0]) & (cacheTAG[addr_INDEX][0] == addr_TAG))
+		begin
+			setLRU_L1(0);
+			cacheVALID[addr_INDEX][0] <= 0;
+		end
+		else if ((cacheVALID[addr_INDEX][1]) & (cacheTAG[addr_INDEX][1] == addr_TAG))
+		begin
+			setLRU_L1(1);
+			cacheVALID[addr_INDEX][1] <= 0;
+		end
+		else if ((cacheVALID[addr_INDEX][2]) & (cacheTAG[addr_INDEX][2] == addr_TAG))
+		begin
+			setLRU_L1(2);
+			cacheVALID[addr_INDEX][2] <= 0;
+		end
+		else if ((cacheVALID[addr_INDEX][3]) & (cacheTAG[addr_INDEX][3] == addr_TAG))
+		begin
+			setLRU_L1(3);
+			cacheVALID[addr_INDEX][3] <= 0;
+		end
+		
+		else 
+		begin
+			$display("INVALIDATION FAILED");
+		end
+	end
 endtask
 
 task Invalidate_L1;
@@ -281,22 +317,7 @@ task Read_L1_Cache;
 					cacheVALID[addr_INDEX][3] <= 0;
 			end
 			#1; //waiting for cache valid bits to be updated
-			/*
-			for(j=0;j<4;j=j+1) begin
-				if (!cacheVALID[addr_INDEX][j]) 
-				begin
-				#1 wait(MEM_ACK==0) Mem_Address<= (VMEM_Address[31:(4*j)]<<2);
-				#1 Mem_Request<=1;//read from memory
-				#1 wait(MEM_ACK==1) ; 
-				//write the 32-bit to cacheline
-				//cacheLINE[addr_INDEX][j] [31:0] <= Mem_databus;
-				$display("VMEM_Address=====%h",VMEM_Address);
-				#1 r<=r+8;
-				#1 q<=q+32;
-				#1 Mem_Request<=0;
-				end
-			end
-			*/
+			
 			//Searching for an invalid way to populate the line
 			if (!cacheVALID[addr_INDEX][0]) 
 			begin
