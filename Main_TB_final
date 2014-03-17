@@ -29,8 +29,7 @@ module paging_system_TB ();
 reg CPU_Request;
 reg OP_Request;
 reg CPU_WE;
-wire VMEM_WE;
-wire MEM_ACK;
+
 reg PRINT_STATS;
 reg [31:0] CPU_Address;
 reg [3:0]OPERATIONS;
@@ -44,13 +43,14 @@ wire MEM_WE;
 wire CPU_ACK; // acknowledge the completion to CPU
 wire VMEM_ACK;
 wire VMEM_Request;
+wire VMEM_WE;
+wire MEM_ACK;
 
 //Bidirectional lines
 wire [31:0] CPU_dataBus;
 wire [31:0] Mem_databus;
-//wire [31:0] VMEM_dataBus;
 wire [31:0] VMEM_dataBus_;
-
+real c = 4;
 
 //Bidirectional drivers
 reg [31:0] CPU_dataBus_driver;
@@ -104,6 +104,8 @@ initial
 begin
 	CPU_dataBus_driver = 2; //designate 2 as the default word to write to memory
 	$display("STARTING THE TEST PATTERN");
+	c=c+(4.0/8.0);
+	$display("THE VALUE OF C IS :%f",c);
 	//MEM_ACK = 0;
 	file = $fopen("trace.txt","r");
 	CPU_Address = 0;
