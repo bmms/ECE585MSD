@@ -25,18 +25,25 @@
 ///////////// General declarations /////////////
 ////////////////////////////////////////////////
 
-integer TotalOperations = 0;
-integer CacheReads = 0;
-integer CacheWrites = 0;
-integer CacheFetches = 0;
+real TotalOperations_L1 = 0;
+real TotalOperations_TLB = 0;
 integer TLBReads=0;
 integer TLBWrites=0;
-integer TLB_HitCount=0;
-integer TLB_MissCount=0;
+real TLB_HitCount=0;
+real TLB_MissCount=0;
+real TLB_HitRatio = 0;
+real TLB_MissRatio = 0;
+integer TLB_Flush=0;
+
+integer CacheReads = 0;
+integer CacheWrites = 0;
 real L1_HitRatio = 0.0;
 real L1_MissRatio = 0.0;
-integer L1_HitCount = 0;
-integer L1_MissCount = 0;
+real L1_HitCount = 0;
+real L1_MissCount = 0;
+integer CacheInvalidations=0;
+
+integer Memory_Reads = 0;
 integer file;
 integer report_file;
 integer report_file_TLB;
