@@ -82,6 +82,7 @@ end
 assign dataBus = (MEM_WE==0 && request==1) ? dataOutput : 32'bz;
  
 //always @(request, addressBus, WE) 
+//
 always @(request) 
 	begin
 		dataOutput <= memory[addressBus[15:2]];
