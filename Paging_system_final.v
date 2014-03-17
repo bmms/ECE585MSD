@@ -103,7 +103,7 @@ always @(CPU_Request)
 				addr_INDEX_TLB		= CPU_Address[14:12];
 				addr_TAG_TLB		= CPU_Address[31:15];
 
-				TotalOperations = TotalOperations +1;
+				TotalOperations_TLB = TotalOperations_TLB +1;
 				//CacheFetches = CacheFetches +1.0;
 				TLBReads = TLBReads +1;
 				
@@ -114,7 +114,7 @@ always @(CPU_Request)
 			#1 CPU_ACK <= 0;
 			$display("RELEASING CPU_dataBus, ready for next command");
 		end
-//		$display("Operations Completed:%d",TotalOperations );
+//		$display("Operations Completed:%d",TotalOperations_TLB );
 	end
 
 
@@ -128,6 +128,7 @@ begin
 
 			8:begin
 				InitTLBCache();
+				TLB_Flush=TLB_Flush+1;
 			end
 			default:
 				$display("");
@@ -162,8 +163,18 @@ endtask
 task PrintStats_TLB;
 begin
 	$display("PRINTING");
+	$fwrite(report_file_TLB, "Total number of TLB reads: %d \n", TLBReads);
 	$fwrite(report_file_TLB, "Total number of TLB cache hits: %d \n", TLB_HitCount);
 	$fwrite(report_file_TLB, "Total number of TLB cache misses: %d \n", TLB_MissCount);
+	$fwrite(report_file_TLB, "Total number of TLB Flush Count: %d \n", TLB_Flush);
+		TLB_HitCount=TLB_HitCount+0.0;
+		TLB_MissCount=TLB_MissCount+0.0;
+		TotalOperations_TLB=TotalOperations_TLB+0.0;
+		TLB_HitRatio = (TLB_HitCount/TotalOperations_TLB)*100;
+		$fwrite(report_file_TLB, "Total number of TLB cache hit ratio: %f \n", TLB_HitRatio);
+		TLB_MissRatio = (TLB_MissCount/ TotalOperations_TLB) * 100;
+		$fwrite(report_file_TLB, "Total number of TLB cache miss ratio: %f \n", TLB_MissRatio);
+	
 end
 endtask
 
@@ -428,9 +439,12 @@ endtask
 
 task setLRU_TLB;
 	//integer i;
-	input n;
+	input reg [1:0]k;
+	
 	begin
 		$display("LRUInitiated");
+		tlbLRU[addr_INDEX_TLB][k] <=1;
+		#1;
 		if (tlbLRU[addr_INDEX_TLB][0] & tlbLRU[addr_INDEX_TLB][1] & 
 		tlbLRU[addr_INDEX_TLB][2] & tlbLRU[addr_INDEX_TLB][3]) begin
 			tlbLRU[addr_INDEX_TLB][0] <= 0;
