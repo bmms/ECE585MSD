@@ -123,7 +123,7 @@ always @(VMEM_Request)
 				addr_INDEX		= VMEM_Address[11:4];
 				addr_TAG		= VMEM_Address[31:12];
 
-				#1 TotalOperations = TotalOperations +1;
+				#1 TotalOperations_L1 = TotalOperations_L1 +1;
 				//CacheFetches = CacheFetches +1.0;
 				CacheReads = CacheReads +1;
 				
@@ -138,7 +138,7 @@ always @(VMEM_Request)
 				addr_INDEX		= VMEM_Address[11:4];
 				addr_TAG		= VMEM_Address[31:12];
 
-				#1 TotalOperations = TotalOperations +1;
+				#1 TotalOperations_L1 = TotalOperations_L1 +1;
 				CacheWrites = CacheWrites + 1;
 				
 				Write_L1_Cache(addr_TAG,addr_INDEX,addr_OFFSET);
@@ -156,7 +156,7 @@ always @(VMEM_Request)
 			#1 VMEM_ACK <= 0;
 			$display("RELEASING VMEM_dataBus_L1, ready for next command");
 		end
-		//$display("Operations Completed:%d",TotalOperations );
+		//$display("Operations Completed:%d",TotalOperations_L1 );
 	end
 
 always@(OP_Request)
@@ -178,7 +178,7 @@ begin
 				addr_INDEX		= VMEM_Address[11:4];
 				addr_TAG		= VMEM_Address[31:12];
 
-				#1 TotalOperations = TotalOperations +1;
+				#1 TotalOperations_L1 = TotalOperations_L1 +1;
 				Invalidate_L1_Line(addr_TAG,addr_INDEX,addr_OFFSET);
 			end
 			
@@ -241,22 +241,26 @@ input [L1_OFFSET-1:0]addr_OFFSET;
 		if ((cacheVALID[addr_INDEX][0]) & (cacheTAG[addr_INDEX][0] == addr_TAG))
 		begin
 			setLRU_L1(0);
+			CacheInvalidations=CacheInvalidations+1;
 			cacheVALID[addr_INDEX][0] <= 0;
 		end
 		else if ((cacheVALID[addr_INDEX][1]) & (cacheTAG[addr_INDEX][1] == addr_TAG))
 		begin
 			setLRU_L1(1);
 			cacheVALID[addr_INDEX][1] <= 0;
+			CacheInvalidations=CacheInvalidations+1;
 		end
 		else if ((cacheVALID[addr_INDEX][2]) & (cacheTAG[addr_INDEX][2] == addr_TAG))
 		begin
 			setLRU_L1(2);
 			cacheVALID[addr_INDEX][2] <= 0;
+			CacheInvalidations=CacheInvalidations+1;
 		end
 		else if ((cacheVALID[addr_INDEX][3]) & (cacheTAG[addr_INDEX][3] == addr_TAG))
 		begin
 			setLRU_L1(3);
 			cacheVALID[addr_INDEX][3] <= 0;
+			CacheInvalidations=CacheInvalidations+1;
 		end
 		
 		else 
@@ -276,13 +280,24 @@ endtask
 task PrintStats;
 begin
 	$display("PRINTING");
-	$fwrite(report_file, "Total number of cache operations(Reads and Writes): %d \n", TotalOperations);
+	$fwrite(report_file, "Total number of cache operations(Reads and Writes): %d \n", TotalOperations_L1);
 	$fwrite(report_file, "Total number of cache reads: %d \n", CacheReads);
 	$fwrite(report_file, "Total number of cache writes: %d \n", CacheWrites);
 	$fwrite(report_file, "Total number of L1 cache hits: %d \n", L1_HitCount);
 	$fwrite(report_file, "Total number of L1 cache misses: %d \n", L1_MissCount);
-	$fwrite(report_file, "Total number of TLB cache hits: %d \n", TLB_HitCount);
-	$fwrite(report_file, "Total number of TLB cache misses: %d \n", TLB_MissCount);
+	$fwrite(report_file, "Total number of Memory Accesses: %d \n", Memory_Reads);
+	$fwrite(report_file, "Total number of CacheInvalidations: %d \n", CacheInvalidations);
+	if (TotalOperations_L1 != 0) // to make sure we got instructions from trace file
+	begin
+		L1_HitCount=L1_HitCount+0.0;
+		L1_MissCount=L1_MissCount+0.0;
+		TotalOperations_L1=TotalOperations_L1+0.0;
+		L1_HitRatio = (L1_HitCount/TotalOperations_L1)*100;
+		$fwrite(report_file, "Total number of L1 cache hit ratio: %f \n", L1_HitRatio);
+		L1_MissRatio = (L1_MissCount/ TotalOperations_L1) * 100;
+		$fwrite(report_file, "Total number of L1 cache miss ratio: %f \n", L1_MissRatio);
+	end
+	
 end
 endtask
 
@@ -325,6 +340,7 @@ task Read_L1_Cache;
 				cacheVALID[addr_INDEX][0] <= 1;
 				cacheTAG[addr_INDEX][0] <= addr_TAG;
 				// Get the line from Memory
+				Memory_Reads=Memory_Reads+1;
 				//read 32-bit 4 times to get the line in cache.
 				
 				//Reading first 32-bit word
@@ -380,6 +396,7 @@ task Read_L1_Cache;
 				cacheTAG[addr_INDEX][1] <= addr_TAG;
 				
 				// Get the line from Memory
+				Memory_Reads=Memory_Reads+1;
 				//Read 32-bit data four times 
 				
 				//Reading first 32-bit word
@@ -435,7 +452,7 @@ task Read_L1_Cache;
 				cacheVALID[addr_INDEX][2] <= 1;
 				cacheTAG[addr_INDEX][2] <= addr_TAG;
 				// Get the line from Memory
-				
+				Memory_Reads=Memory_Reads+1;
 				//Reading first 32-bit word
 				#1 wait(MEM_ACK==0) Mem_Address<= (VMEM_Address[31:2]<<2);
 				#1 Mem_Request<=1;//read from memory
@@ -487,7 +504,7 @@ task Read_L1_Cache;
 				cacheVALID[addr_INDEX][3] <= 1;
 				cacheTAG[addr_INDEX][3] <= addr_TAG;
 				// Get the line from Memory
-				
+				Memory_Reads=Memory_Reads+1;
 				//Reading first 32-bit word
 				#1 wait(MEM_ACK==0) Mem_Address<= (VMEM_Address[31:2]<<2);
 				#1 Mem_Request<=1;//read from memory;
